@@ -9,21 +9,20 @@
 
 DS1302 rtc(C_RST, C_DAT, C_CLK);
 
-#define NUM_LEDS 150
-#define DATA_PIN 4
+#define NUM_LEDS 103
+#define DATA_PIN 11
 #define LED_TYPE    WS2811
 #define COLOR_ORDER GRB
 
 CRGB leds[NUM_LEDS];
 
 ////////////////////////////////////////////////////////////////////
-#define STRIP_ELEMENT "DESK"
-#define IS_MASTER false
+#define STRIP_ELEMENT "SHELF"
 
-#define FIRST_CHILD_DEVICE 8
-#define CHILD_DEVICES 1
+#define FIRST_CHILD_DEVICE 4
+#define CHILD_DEVICES 6
 
-#define DEVICE_ID 8
+#define DEVICE_ID 1
 ////////////////////////////////////////////////////////////////////
 
 // WD ... Weekdays
@@ -50,28 +49,19 @@ CRGB leds[NUM_LEDS];
 #define SLEEPTIME_WD "21:30:00"
 #define SLEEPTIME_WE "22:30:00"
 
+
 void setup() {
 
     Serial.begin(9600);
 
-    if(IS_MASTER)
-    {
-        Wire.begin(); // join i2c bus (address optional for master) 
-        
-        // Set the clock to run-mode, and disable the write protection
-        rtc.halt(false);
-        rtc.writeProtect(false);
+    Wire.begin(DEVICE_ID); // join i2c bus (address optional for master) 
+    Wire.onReceive(SettingUpdater);
+    Wire.onRequest(SendTimeToControll);  
     
-        //rtc.setDOW(FRIDAY);         // Set Day-of-Week
-        //rtc.setTime(18,44,0);       // Set the time
-        //rtc.setDate(18,1, 2019);    // Set the date  
-    }
-    else
-    {
-        Wire.begin(DEVICE_ID);        
-        Wire.onReceive(EventTrigger); 
-    }
-    
+    // Set the clock to run-mode, and disable the write protection
+    rtc.halt(false);
+    rtc.writeProtect(false);
+   
 
     FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
 
@@ -83,47 +73,47 @@ void setup() {
 
 void loop() 
 {
-    if(IS_MASTER)
-    {
-        // EVENTS FOR MONDAY - FRIDAY
-        if(DOWIs("Monday") || DOWIs("Tuesday") || DOWIs("Wednesday") || DOWIs("Thursday") || DOWIs("Friday"))
-        {
-          if(TimeIs(WAKETIME_WD)) LightingRoutine("WakeUp");
-          if(TimeIs(PAUSETIME1_WD)) LightingRoutine("PowerDown");
-          if(TimeIs(STARTTIME1_WD)) LightingRoutine("StartUp");
+
+      // EVENTS FOR MONDAY - FRIDAY
+      if(DOWIs("Monday") || DOWIs("Tuesday") || DOWIs("Wednesday") || DOWIs("Thursday") || DOWIs("Friday"))
+      {
+        if(TimeIs(WAKETIME_WD)) LightingRoutine("WakeUp");
+        if(TimeIs(PAUSETIME1_WD)) LightingRoutine("PowerDown");
+        if(TimeIs(STARTTIME1_WD)) LightingRoutine("StartUp");
+  
+        if(TimeIs(ALERTTIME1_WD)) LightingRoutine("WakeUpAlert");    
+        if(TimeIs(ALERTTIME2_WD)) LightingRoutine("LeaveAlert");    
+      }
     
-          if(TimeIs(ALERTTIME1_WD)) LightingRoutine("WakeUpAlert");    
-          if(TimeIs(ALERTTIME2_WD)) LightingRoutine("LeaveAlert");    
-        }
-      
-        // EVENTS FOR SUNDAY - THURSDAY
-        if(DOWIs("Sunday") || DOWIs("Monday") || DOWIs("Tuesday") || DOWIs("Wednesday") || DOWIs("Thursday"))
-        {
-          if(TimeIs(SLEEPTIME_WD)) LightingRoutine("Sleep");
-        }
-      
-        // EVENTS FOR SATURDAY - SUNDAY
-        if(DOWIs("Saturday") || DOWIs("Sunday"))
-        {
-          if(TimeIs(WAKETIME_WE)) LightingRoutine("WakeUp");
-          if(TimeIs(PAUSETIME1_WE)) LightingRoutine("PowerDown");
-          if(TimeIs(STARTTIME1_WE)) LightingRoutine("StartUp");
+      // EVENTS FOR SUNDAY - THURSDAY
+      if(DOWIs("Sunday") || DOWIs("Monday") || DOWIs("Tuesday") || DOWIs("Wednesday") || DOWIs("Thursday"))
+      {
+        if(TimeIs(SLEEPTIME_WD)) LightingRoutine("Sleep");
+      }
     
-          if(TimeIs(ALERTTIME3_WE)) LightingRoutine("NoonAlert");            
-        }
-    
-        // EVENTS FOR FRIDAY - SATURDAY
-        if(DOWIs("Friday") || DOWIs("Saturday"))
-        {
-          if(TimeIs(SLEEPTIME_WE)) LightingRoutine("Sleep");
-          
-        }
-    
-        // EVENTS FOR MONDAY - SUNDAY
-        if(TimeIs(ALERTTIME4_WW)) LightingRoutine("EveningAlert");    
-        if(TimeIs(ALERTTIME5_WW)) LightingRoutine("PrimeTimeAlert");
-    }
-       delay(500);
+      // EVENTS FOR SATURDAY - SUNDAY
+      if(DOWIs("Saturday") || DOWIs("Sunday"))
+      {
+        if(TimeIs(WAKETIME_WE)) LightingRoutine("WakeUp");
+        if(TimeIs(PAUSETIME1_WE)) LightingRoutine("PowerDown");
+        if(TimeIs(STARTTIME1_WE)) LightingRoutine("StartUp");
+  
+        if(TimeIs(ALERTTIME3_WE)) LightingRoutine("NoonAlert");            
+      }
+  
+      // EVENTS FOR FRIDAY - SATURDAY
+      if(DOWIs("Friday") || DOWIs("Saturday"))
+      {
+        if(TimeIs(SLEEPTIME_WE)) LightingRoutine("Sleep");
+        
+      }
+  
+      // EVENTS FOR MONDAY - SUNDAY
+      if(TimeIs(ALERTTIME4_WW)) LightingRoutine("EveningAlert");    
+      if(TimeIs(ALERTTIME5_WW)) LightingRoutine("PrimeTimeAlert");
+
+    Serial.println(rtc.getTimeStr());
+       delay(300);
 }
 
 //===================================================================================================================
@@ -150,12 +140,17 @@ bool DOWIs(char dowString[])
 
 void NotifyChildDevices(int notification)
 {
+  
     for(int i = FIRST_CHILD_DEVICE ; i < CHILD_DEVICES + FIRST_CHILD_DEVICE ; i++)
     {
         Wire.beginTransmission(i);
-        Wire.write(notification);           
-        Wire.endTransmission();   
+
+        Wire.write(notification);
+        
+        Wire.endTransmission();
+ 
     }
+    
 }
 
 //===================================================================================================================
@@ -178,18 +173,112 @@ void LightingRoutine(char routine[])
 
 void EventTrigger()
 {
-    int eventValue = Wire.read(); 
+    int eventValue; 
+
+    static int brightness = 100;
+    static bool powerStateOn = true;
+
+    while (Wire.available()) 
+    { 
+        eventValue = Wire.read();  
+    }
     
     if(eventValue == 1) WakeUpRoutine(10);
-    if(eventValue == 2) SleepRoutine(10);
-    if(eventValue == 3) StartUpRoutine(10);
-    if(eventValue == 4) PowerDownRoutine(10);
+    else if(eventValue == 2) SleepRoutine(10);
+    else if(eventValue == 3) StartUpRoutine(10);
+    else if(eventValue == 4) PowerDownRoutine(10);
     
-    if(eventValue == 5) WakeUpAlert(10);
-    if(eventValue == 6) LeaveAlert(10);
-    if(eventValue == 7) NoonAlert(10);
-    if(eventValue == 8) EveningAlert(10);
-    if(eventValue == 9) PrimeTimeAlert(10); 
+    else if(eventValue == 5) WakeUpAlert(10);
+    else if(eventValue == 6) LeaveAlert(10);
+    else if(eventValue == 7) NoonAlert(10);
+    else if(eventValue == 8) EveningAlert(10);
+    else if(eventValue == 9) PrimeTimeAlert(10); 
+
+    else if(eventValue == 150)
+    {
+        if(powerStateOn) FastLED.setBrightness(0);
+        else FastLED.setBrightness(brightness);
+
+        FastLED.show(); 
+        powerStateOn = !powerStateOn;    
+    }
+
+    else if(eventValue >=200 && eventValue <=210)
+    {
+        brightness = (eventValue - 200) * 10; 
+        FastLED.setBrightness(brightness);
+        FastLED.show();     
+    }
+}
+
+void SettingUpdater()
+{
+  
+    int setting; 
+
+    while (Wire.available()) 
+    { 
+        setting = Wire.read();  
+    }
+    
+    static int tmpSecond = 0;
+    static int tmpMinute = 0;
+    static int tmpHour = 0;
+
+    static int brightness = 100;
+    static bool powerStateOn = true;
+    
+    if(setting >=0 && setting <=59)
+    {
+        //second 
+        tmpSecond = setting;
+        rtc.setTime(tmpHour,tmpMinute,tmpSecond);       
+    }
+    if(setting >=60 && setting <=119)
+    {
+        //minute
+        tmpMinute = setting - 60;
+        rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
+    }
+    if(setting >=120 && setting <=143)
+    {
+        //hour 
+        tmpHour = setting - 120;
+        rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
+    }
+
+    if(setting >=200 && setting <=210)
+    {
+        
+        brightness = (setting - 200) * 10; 
+        FastLED.setBrightness(brightness);
+        FastLED.show();     
+    }
+
+    if(setting == 150)
+    {
+       
+        
+        if(powerStateOn) FastLED.setBrightness(0);
+        else FastLED.setBrightness(brightness);
+
+        FastLED.show(); 
+        powerStateOn = !powerStateOn;  
+    }
+
+    if(setting == 151) rtc.setDOW(MONDAY);    
+    if(setting == 152) rtc.setDOW(TUESDAY);    
+    if(setting == 153) rtc.setDOW(WEDNESDAY);    
+    if(setting == 154) rtc.setDOW(THURSDAY);    
+    if(setting == 155) rtc.setDOW(FRIDAY);    
+    if(setting == 156) rtc.setDOW(SATURDAY);    
+    if(setting == 157) rtc.setDOW(SUNDAY);   
+       
+}
+
+void SendTimeToControll()
+{
+    Wire.write(rtc.getTimeStr());
 }
 
 //===================================================================================================================
@@ -339,7 +428,7 @@ void PowerDownRoutine(int pbSpeed)
 // Same for every Strip
 //================================
 
-    for(int i = 100; i > 0 ; i--)
+    for(int i = 100; i >= 0 ; i--)
     {
         FastLED.setBrightness(i);
         FastLED.show(); 

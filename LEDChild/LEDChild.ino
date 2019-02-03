@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <FastLED.h>
+#include <EEPROM.h>
 
 #define NUM_LEDS 150
 #define DATA_PIN 2
@@ -12,10 +13,14 @@ CRGB leds[NUM_LEDS];
 
 // DESK | MONITOR | PCWALL | BOTTLES | BED | BACKWALL
 
-#define STRIP_ELEMENT "DESK"
-#define DEVICE_ID 4
+#define STRIP_ELEMENT "BED"
+#define DEVICE_ID 5
 
 ////////////////////////////////////////////////////////////////////
+
+int colorRed = 0;
+int colorGreen = 0;
+int colorBlue = 0;
 
 void setup() {
 
@@ -52,33 +57,59 @@ void EventTrigger()
     while (Wire.available()) 
     { 
         eventValue = Wire.read();  
-    }
     
-    if(eventValue == 1) WakeUpRoutine(10);
-    else if(eventValue == 2) SleepRoutine(10);
-    else if(eventValue == 3) StartUpRoutine(10);
-    else if(eventValue == 4) PowerDownRoutine(10);
     
-    else if(eventValue == 5) WakeUpAlert(10);
-    else if(eventValue == 6) LeaveAlert(10);
-    else if(eventValue == 7) NoonAlert(10);
-    else if(eventValue == 8) EveningAlert(10);
-    else if(eventValue == 9) PrimeTimeAlert(10); 
+        if(eventValue == 1 && powerStateOn) WakeUpRoutine(10);
+        else if(eventValue == 2 && powerStateOn) SleepRoutine(10);
+        else if(eventValue == 3 && powerStateOn) StartUpRoutine(10);
+        else if(eventValue == 4 && powerStateOn) PowerDownRoutine(10);
+        
+        else if(eventValue == 5 && powerStateOn) WakeUpAlert(10);
+        else if(eventValue == 6 && powerStateOn) LeaveAlert(10);
+        else if(eventValue == 7 && powerStateOn) NoonAlert(10);
+        else if(eventValue == 8 && powerStateOn) EveningAlert(10);
+        else if(eventValue == 9 && powerStateOn) PrimeTimeAlert(10); 
+    
+        else if(eventValue == 150)
+        {
+            if(powerStateOn) FastLED.setBrightness(0);
+            else FastLED.setBrightness(brightness);
+    
+            FastLED.show(); 
+            powerStateOn = !powerStateOn;    
+        }
+    
+        else if(eventValue >=200 && eventValue <=210)
+        {
+            brightness = (eventValue - 200) * 10; 
+            FastLED.setBrightness(brightness);
+            FastLED.show();     
+        }
+    
+        if(eventValue == 180)
+        {
+            colorRed = Wire.read();   
+            colorGreen = Wire.read();
+            colorBlue = Wire.read(); 
 
-    else if(eventValue == 150)
-    {
-        if(powerStateOn) FastLED.setBrightness(0);
-        else FastLED.setBrightness(brightness);
+            EEPROM.write(0,colorRed);
+            EEPROM.write(1,colorGreen);
+            EEPROM.write(2,colorBlue);
 
-        FastLED.show(); 
-        powerStateOn = !powerStateOn;    
-    }
+            for(int i = 0 ; i < NUM_LEDS ; i++)
+            {
+                leds[i].r = colorRed; 
+                leds[i].g = colorGreen; 
+                leds[i].b = colorBlue;  
+            }
+            FastLED.show();
+        }
 
-    else if(eventValue >=200 && eventValue <=210)
-    {
-        brightness = (eventValue - 200) * 10; 
-        FastLED.setBrightness(brightness);
-        FastLED.show();     
+        if(eventValue == 181)
+        {
+            SetDefaultTheme();
+            FastLED.show();  
+        }
     }
 }
 
@@ -112,35 +143,18 @@ void SetDefaultTheme()
         shelf++;
         for(int i = 1 + (shelf * 17); i<=17 + (shelf * 17) ; i++) leds[i] = 0xf2ff00;
     }
-
-    else if(strcmp(STRIP_ELEMENT,"DESK") == 0)
+    else
     {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
-    }
-
-    else if(strcmp(STRIP_ELEMENT,"MONITOR") == 0)
-    {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
-    }
-
-    else if(strcmp(STRIP_ELEMENT,"PCWALL") == 0)
-    {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
-    }
-
-    else if(strcmp(STRIP_ELEMENT,"BOTTLES") == 0)
-    {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
-    }
-
-    else if(strcmp(STRIP_ELEMENT,"BED") == 0)
-    {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
-    }
-
-    else if(strcmp(STRIP_ELEMENT,"BACKWALL") == 0)
-    {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
+        int red = EEPROM.read(0);
+        int grn = EEPROM.read(1);
+        int blu = EEPROM.read(2);
+      
+        for(int i = 0 ; i < NUM_LEDS ; i++)
+        {
+            leds[i].r = red; 
+            leds[i].g = grn; 
+            leds[i].b = blu;   
+        } 
     }
 }
 

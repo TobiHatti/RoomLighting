@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <DS1302.h>
 #include <FastLED.h>
+#include <EEPROM.h>
 
 #define C_RST 2
 #define C_DAT 3
@@ -19,7 +20,7 @@ CRGB leds[NUM_LEDS];
 ////////////////////////////////////////////////////////////////////
 #define STRIP_ELEMENT "SHELF"
 
-#define FIRST_CHILD_DEVICE 4
+#define FIRST_CHILD_DEVICE 2
 #define CHILD_DEVICES 6
 
 #define DEVICE_ID 1
@@ -49,6 +50,14 @@ CRGB leds[NUM_LEDS];
 #define SLEEPTIME_WD "21:30:00"
 #define SLEEPTIME_WE "22:30:00"
 
+
+bool powerStateOn = true;
+int brightness = 100;
+
+
+int colorRed = 0;
+int colorGreen = 0;
+int colorBlue = 0;
 
 void setup() {
 
@@ -159,16 +168,16 @@ void NotifyChildDevices(int notification)
 
 void LightingRoutine(char routine[])
 {
-    if(strcmp(routine,"WakeUp") == 0) { NotifyChildDevices(1); WakeUpRoutine(10); }
-    else if(strcmp(routine,"Sleep") == 0) { NotifyChildDevices(2); SleepRoutine(10); }
-    else if(strcmp(routine,"StartUp") == 0) { NotifyChildDevices(3); StartUpRoutine(10); }
-    else if(strcmp(routine,"PowerDown") == 0) { NotifyChildDevices(4); PowerDownRoutine(10); }
+    if(strcmp(routine,"WakeUp") == 0) { NotifyChildDevices(1); if(powerStateOn) WakeUpRoutine(10); }
+    else if(strcmp(routine,"Sleep") == 0) { NotifyChildDevices(2); if(powerStateOn) SleepRoutine(10); }
+    else if(strcmp(routine,"StartUp") == 0) { NotifyChildDevices(3); if(powerStateOn) StartUpRoutine(10); }
+    else if(strcmp(routine,"PowerDown") == 0) { NotifyChildDevices(4); if(powerStateOn) PowerDownRoutine(10); }
     
-    else if(strcmp(routine,"WakeUpAlert") == 0) { NotifyChildDevices(5); WakeUpAlert(10); }
-    else if(strcmp(routine,"LeaveAlert") == 0) { NotifyChildDevices(6); LeaveAlert(10); }
-    else if(strcmp(routine,"NoonAlert") == 0) { NotifyChildDevices(7); NoonAlert(10); }
-    else if(strcmp(routine,"EveningAlert") == 0) { NotifyChildDevices(8); EveningAlert(10); }
-    else if(strcmp(routine,"PrimeTimeAlert") == 0) { NotifyChildDevices(9); PrimeTimeAlert(10); }
+    else if(strcmp(routine,"WakeUpAlert") == 0) { NotifyChildDevices(5); if(powerStateOn) WakeUpAlert(10); }
+    else if(strcmp(routine,"LeaveAlert") == 0) { NotifyChildDevices(6); if(powerStateOn) LeaveAlert(10); }
+    else if(strcmp(routine,"NoonAlert") == 0) { NotifyChildDevices(7); if(powerStateOn) NoonAlert(10); }
+    else if(strcmp(routine,"EveningAlert") == 0) { NotifyChildDevices(8); if(powerStateOn) EveningAlert(10); }
+    else if(strcmp(routine,"PrimeTimeAlert") == 0) { NotifyChildDevices(9); if(powerStateOn) PrimeTimeAlert(10); }
 }
 
 void EventTrigger()
@@ -215,65 +224,86 @@ void SettingUpdater()
 {
   
     int setting; 
-
-    while (Wire.available()) 
-    { 
-        setting = Wire.read();  
-    }
     
     static int tmpSecond = 0;
     static int tmpMinute = 0;
     static int tmpHour = 0;
 
-    static int brightness = 100;
-    static bool powerStateOn = true;
+    while (Wire.available()) 
+    { 
+        setting = Wire.read();  
     
-    if(setting >=0 && setting <=59)
-    {
-        //second 
-        tmpSecond = setting;
-        rtc.setTime(tmpHour,tmpMinute,tmpSecond);       
-    }
-    if(setting >=60 && setting <=119)
-    {
-        //minute
-        tmpMinute = setting - 60;
-        rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
-    }
-    if(setting >=120 && setting <=143)
-    {
-        //hour 
-        tmpHour = setting - 120;
-        rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
-    }
+        if(setting >=0 && setting <=59)
+        {
+            //second 
+            tmpSecond = setting;
+            rtc.setTime(tmpHour,tmpMinute,tmpSecond);       
+        }
+        if(setting >=60 && setting <=119)
+        {
+            //minute
+            tmpMinute = setting - 60;
+            rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
+        }
+        if(setting >=120 && setting <=143)
+        {
+            //hour 
+            tmpHour = setting - 120;
+            rtc.setTime(tmpHour,tmpMinute,tmpSecond); 
+        }
+    
+        if(setting >=200 && setting <=210)
+        {
+            
+            brightness = (setting - 200) * 10; 
+            FastLED.setBrightness(brightness);
+            FastLED.show();     
+        }
+    
+        if(setting == 150)
+        {
+           
+            
+            if(powerStateOn) FastLED.setBrightness(0);
+            else FastLED.setBrightness(brightness);
+    
+            FastLED.show(); 
+            powerStateOn = !powerStateOn;  
+        }
+    
+        if(setting == 151) rtc.setDOW(MONDAY);    
+        if(setting == 152) rtc.setDOW(TUESDAY);    
+        if(setting == 153) rtc.setDOW(WEDNESDAY);    
+        if(setting == 154) rtc.setDOW(THURSDAY);    
+        if(setting == 155) rtc.setDOW(FRIDAY);    
+        if(setting == 156) rtc.setDOW(SATURDAY);    
+        if(setting == 157) rtc.setDOW(SUNDAY);   
 
-    if(setting >=200 && setting <=210)
-    {
-        
-        brightness = (setting - 200) * 10; 
-        FastLED.setBrightness(brightness);
-        FastLED.show();     
+        if(setting == 180)
+        {
+            colorRed = Wire.read();   
+            colorGreen = Wire.read();
+            colorBlue = Wire.read(); 
+
+            EEPROM.write(0,colorRed);
+            EEPROM.write(1,colorGreen);
+            EEPROM.write(2,colorBlue);
+
+            for(int i = 0 ; i < NUM_LEDS ; i++)
+            {
+                leds[i].r = colorRed; 
+                leds[i].g = colorGreen; 
+                leds[i].b = colorBlue;  
+            }
+            FastLED.show();
+        }
+
+        if(setting == 181)
+        {
+            SetDefaultTheme();
+            FastLED.show();  
+        }
     }
-
-    if(setting == 150)
-    {
-       
-        
-        if(powerStateOn) FastLED.setBrightness(0);
-        else FastLED.setBrightness(brightness);
-
-        FastLED.show(); 
-        powerStateOn = !powerStateOn;  
-    }
-
-    if(setting == 151) rtc.setDOW(MONDAY);    
-    if(setting == 152) rtc.setDOW(TUESDAY);    
-    if(setting == 153) rtc.setDOW(WEDNESDAY);    
-    if(setting == 154) rtc.setDOW(THURSDAY);    
-    if(setting == 155) rtc.setDOW(FRIDAY);    
-    if(setting == 156) rtc.setDOW(SATURDAY);    
-    if(setting == 157) rtc.setDOW(SUNDAY);   
-       
 }
 
 void SendTimeToControll()
@@ -311,11 +341,20 @@ void SetDefaultTheme()
         shelf++;
         for(int i = 1 + (shelf * 17); i<=17 + (shelf * 17) ; i++) leds[i] = 0xf2ff00;
     }
-
-    if(strcmp(STRIP_ELEMENT,"DESK") == 0)
+    else
     {
-        for(int i = 0 ; i < NUM_LEDS ; i++) leds[i] = 0x00ffff;  
+        int red = EEPROM.read(0);
+        int grn = EEPROM.read(1);
+        int blu = EEPROM.read(2);
+      
+        for(int i = 0 ; i < NUM_LEDS ; i++)
+        {
+            leds[i].r = red; 
+            leds[i].g = grn; 
+            leds[i].b = blu;   
+        } 
     }
+
 }
 
 //===================================================================================================================
